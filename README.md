@@ -13,13 +13,31 @@ Though INDI is generally used for astronomical instruments, it can work with any
 
 ## Installation
 
-You may need a number of required packages installing on your machine, depending on which functions you will be calling upon, these may include; a redis server (For debian systems; apt-get install redis-server), and indiserver with drivers (apt-get install indi-bin). If you are using the MQTT functions you will also need an MQTT server on your network (apt-get install mosquitto). 
+You may need a number of required packages installing on your machine, depending on which functions you will be calling upon, these may include:
 
-For debian systems you may need apt-get install python3-pip.
+A redis server, assuming a debian system:
 
-Then install indi-mr with:
+> apt-get install redis-server
+
+indiserver with drivers:
+
+> apt-get install indi-bin
+
+If you are using the MQTT functions you will also need an MQTT server on your network:
+
+> apt-get install mosquitto
+
+You may need the Python3 version of pip to obtain further packages from Pypi.
+
+> apt-get install python3-pip.
+
+Then install indi-mr from pypi with:
 
 > python3 -m pip install indi-mr
+
+Or - if you just want to install it with your own user permissions only:
+
+> python3 -m pip install --user indi-mr
 
 Using a virtual environment may be preferred, if you need further information on pip and virtual environments, try:
 
