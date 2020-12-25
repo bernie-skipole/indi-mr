@@ -1,7 +1,7 @@
 
 
-indi-mr - INDI - MQTT - REDIS
-=============================
+indi-mr = INDI to MQTT to REDIS
+===============================
 
 .. toctree::
    :maxdepth: 2

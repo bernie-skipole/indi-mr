@@ -13,7 +13,7 @@ setuptools.setup(
     description="INDI - MQTT - REDIS - provides functions for transferring the INDI protocol via MQTT and converting to redis storage, with tools to read/write to redis and hence control remote instruments.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/bernie-skipole/indi-mqtt",
+    url="https://github.com/bernie-skipole/indi-mr",
     packages=['indi_mr'],
     classifiers=[
         "Programming Language :: Python :: 3.6",
