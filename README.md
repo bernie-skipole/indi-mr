@@ -13,9 +13,11 @@ Though INDI is generally used for astronomical instruments, it can work with any
 
 ## Installation
 
-Server dependencies depend on which functions you will be calling upon, but may include; a redis server (For debian systems; apt-get install redis-server), and indiserver with drivers (apt-get install indi-bin). If you are using the MQTT functions you will also need an MQTT server on your network (apt-get install mosquitto). 
+You may need a number of required packages installing on your machine, depending on which functions you will be calling upon, these may include; a redis server (For debian systems; apt-get install redis-server), and indiserver with drivers (apt-get install indi-bin). If you are using the MQTT functions you will also need an MQTT server on your network (apt-get install mosquitto). 
 
-For debian systems you may need apt-get install python3-pip, and then use whichever variation of the pip command required by your environment, one example being:
+For debian systems you may need apt-get install python3-pip.
+
+Then install indi-mr with:
 
 > python3 -m pip install indi-mr
 
@@ -23,15 +25,21 @@ Using a virtual environment may be preferred, if you need further information on
 
 https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/
 
-You may also need pip to install the following packages: 
+You may also need to install the following packages: 
 
-redis - Python redis client, needed if the redis storage options are used.
+Python redis client, needed if the redis storage options are used.
 
-paho-mqtt - Python MQTT client, needed if you are using the MQTT facility.
+> python3 -m pip install redis
+
+Python MQTT client, needed if you are using the MQTT facility.
+
+> python3 -m pip install paho-mqtt
 
 These requirements are not automatically installed when you install indi-mr since you may be using MQTT or redis or both, the actual choice is left to you.
 
-There is also a Python web client available, indiredis, which you may find useful which reads/writes to the redis storage created by the functions of this indi-mr project, and serves the instrument controls as a web service. If you wish to use that client, install indiredis via pip.
+There is also a Python web client available, indiredis, which you may find useful which reads/writes to the redis storage created by the functions of this indi-mr project, and serves the instrument controls as a web service:
+
+> python3 -m pip install indiredis
 
 
 ## Package indi_mr
