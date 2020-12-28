@@ -10,13 +10,13 @@ which transmits the values on to indiserver and hence the attached instruments.
 These functions take the namedtuple redisserver as an argument and apply the key
 prefix as defined in the tuple to the redis keys.
 
-indiserver must be running, and inditoredis, typically in other processes. These
+Typically another process will be storing INDI data into redis. These
 functions can then be imported into your own GUI clent as a convenient way of
-accessing redis.
+accessing that data.
 
 Your script could start with::
 
-    from indiredis import redis_server, tools
+    from indi_mr import redis_server, tools
 
     redisserver = redis_server(host='localhost', port=6379)
     rconn = tools.open_redis(redisserver)
