@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="indi-mr",
-    version="0.2.0",
+    version="0.2.1",
     author="Bernard Czenkusz",
     author_email="bernie@skipole.co.uk",
     description="INDI - MQTT - REDIS - provides functions for transferring the INDI protocol via MQTT and converting to redis storage, with tools to read/write to redis and hence control remote instruments.",
@@ -15,6 +15,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/bernie-skipole/indi-mr",
     packages=['indi_mr'],
+    keywords='indi mqtt astronomy instrument',
     classifiers=[
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",

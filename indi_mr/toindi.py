@@ -34,7 +34,7 @@ _INDI_VERSION = "1.7"
 #    When a Client sends a command to change a Property, the Client
 #    shall henceforth consider the Property state to be Busy
 #
-# So this indredis package sets the state to Busy in the hash table 'attributes:<propertyname>:<devicename>'
+# So this indredis package sets the state to Busy in the redis hash table 'attributes:<propertyname>:<devicename>'
 
 # If enableBLOB is sent, the Busy flag is not set (as it is not clear if this is a 'property')
 # however the redis property blobs attribute is set to Enabled or Disabled

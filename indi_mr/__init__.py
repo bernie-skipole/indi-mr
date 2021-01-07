@@ -61,9 +61,6 @@ MQTTServer = collections.namedtuple('MQTTServer', ['host', 'port', 'username', '
                                                    'snoop_control_topic', 'snoop_data_topic'])
 
 
-# my test mqttserver ip = '10.34.167.1'
-
-
 # Functions which return the appropriate named tuple. Provides defaults and enforces values
 
 def indi_server(host='localhost', port=7624):
