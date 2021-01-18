@@ -140,7 +140,7 @@ class _DriverHandler:
                 driver.snoopsend(self.driverlist, message, root)
                 if driver.checkBlobs(root):
                     # Run 'fromindi.receive_from_indiserver' in the default loop's executor:
-                    devicename = await loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
+                    devicename = await self.loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
                     # result is None, or the device name if a defxxxx was received
                     if devicename and (devicename not in self.devicedict):
                         self.devicedict[devicename] = driver
