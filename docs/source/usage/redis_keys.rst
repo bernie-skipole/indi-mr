@@ -131,7 +131,7 @@ The keys attributes:<propertyname>:<devicename> each hold a hash table of attrib
     * label : GUI label for the property
     * group : group label which gathers properties under headings
     * timestamp : timestamp given with the property
-    * timeout : worse-case time to affect, o if not applicable
+    * timeout : worse-case time to affect, 0 if not applicable
     * vector : Type of property, one of TextVector, NumberVector, SwitchVector, LightVector, BLOBVector
 
 For the SwitchVector, an added value is:
@@ -154,7 +154,7 @@ The keys elementattributes:<elementname>:<propertyname>:<devicename> hold a hash
     * label : GUI label for the element
     * value : the actual value of the element, i.e. the text for an element of a TextVector
     * timestamp : timestamp given with the property (same as property attribute)
-    * timeout : worse-case time to affect, o if not applicable (same as property attribute)
+    * timeout : worse-case time to affect, 0 if not applicable (same as property attribute)
 
 A Blob element has name and label, but not value.
 
@@ -180,7 +180,7 @@ If receiving Blobs are enabled, Blob elements have fields:
     * size : number of bytes in decoded and uncompressed BLOB
     * filepath : path of the file where the Blob has been saved.
     * timestamp : timestamp given with the property (same as property attribute)
-    * timeout : worse-case time to affect, o if not applicable (same as property attribute)
+    * timeout : worse-case time to affect, 0 if not applicable (same as property attribute)
 
 
 Redis pubsub
