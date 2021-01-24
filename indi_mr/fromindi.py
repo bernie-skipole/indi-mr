@@ -256,6 +256,7 @@ class ParentProperty():
         self.label = vector.get("label", self.name)                             # GUI label, use name by default
         self.group = vector.get("group", "DEFAULT GROUP")                       # Property group membership, blank by default
         self.timestamp = vector.get("timestamp", datetime.utcnow().isoformat()) # moment when these data were valid
+        self.timeout = vector.get("timeout", 0)                                 # worse-case time to affect, 0 default, N/A for ro
         self.message = vector.get("message", "")
 
 
@@ -274,6 +275,7 @@ class ParentProperty():
         self.label = self._strattribs["label"]
         self.group = self._strattribs["group"]
         self.timestamp = self._strattribs["timestamp"]
+        self.timeout = self._strattribs["timeout"]
         self.message = self._strattribs["message"]
 
     def _set_permission(self, permission):
@@ -453,11 +455,11 @@ class ParentProperty():
     def update(self, rconn, vector):
         "Update the object attributes to redis"
         self.timestamp = vector.get("timestamp", datetime.utcnow().isoformat()) # moment when these data were valid
-        # timestamp updated before elements updated, in case any of the elements use the timestamp (BLOBs)
+        self.timeout = vector.get("timeout", 0)
         for child in vector:
             element = self.elements[child.get("name")]
-            element.update(rconn, self.device, self.name, child, timestamp=self.timestamp)
-        # alter self according to the values to be set
+            element.update(rconn, self.device, self.name, child, self.timestamp, self.timeout)
+
         state = vector.get("state")     # set state of Property; Idle, OK, Busy or Alert, no change if absent
         if state:
             self.state = state
@@ -530,6 +532,12 @@ class ParentProperty():
 class ParentElement():
     "Parent to Text, Number, Switch, Lights, Blob elements"
 
+
+    def __init__(self, timestamp, timeout=0):
+        "Adds timestamp and timeout to self, gets them from Vector parent"
+        self.timestamp = timestamp
+        self.timeout = timeout
+
     def setup_from_def(self, child, **kwargs):
         self.name = child.get("name")                       # name of the element, required value
         self.label = child.get("label", self.name)  # GUI label, use name by default
@@ -542,6 +550,13 @@ class ParentElement():
         if not self._strattribs:
             return
         self.label = self._strattribs["label"]
+        # timestamp and timeout should already be set by the vector when instance created
+        # but read them from redis anyway. Could be used as a form of checking to ensure
+        # vector and elements are synchronised
+        if "timestamp" in self._strattribs:
+            self.timestamp = self._strattribs["timestamp"]
+        if "timeout" in self._strattribs:
+            self.timeout = self._strattribs["timeout"]
 
 
     def get_attributes(self, rconn, device, name):
@@ -559,8 +574,10 @@ class ParentElement():
         if attribs:
             rconn.hmset(key('elementattributes',self.name, name, device), attribs)
 
-    def update(self, rconn, device, name, child, **kwargs):
+    def update(self, rconn, device, name, child, timestamp, timeout, **kwargs):
         "update the element, from a vector child, and write to redis"
+        self.timestamp = timestamp
+        self.timeout = timeout
         self.set_value(child)   # change value to that given by the xml child
         self.write(rconn, device, name)
 
@@ -582,9 +599,8 @@ class TextVector(ParentProperty):
         super().setup_from_def(rconn, vector)
         perm = vector.get("perm")
         self._set_permission(perm)                 # ostensible Client controlability
-        self.timeout = vector.get("timeout", 0)   # worse-case time to affect, 0 default, N/A for ro
         for child in vector:
-            element = TextElement()
+            element = TextElement(self.timestamp, self.timeout)
             element.setup_from_def(child)
             self.elements[element.name] = element
 
@@ -596,13 +612,12 @@ class TextVector(ParentProperty):
             return
         # the super call has set self._strattribs
         self.perm = self._strattribs["perm"]
-        self.timeout = self._strattribs["timeout"]
         # read the elements
         elements = rconn.smembers(key('elements', name, device))
         if not elements:
             return
         for element_name in elements:
-            element = TextElement()
+            element = TextElement(self.timestamp, self.timeout)
             element.setup_from_redis(rconn, device, name, element_name)
             if not element._status:
                 # failure to read the element
@@ -610,10 +625,6 @@ class TextVector(ParentProperty):
             self.elements[element.name] = element
         self._status = True     # read status set to True, redis read successful
 
-    def update(self, rconn, vector):
-        "Update the object attributes and changed elements to redis"
-        self.timeout = vector.get("timeout", 0)
-        super().update(rconn, vector)
 
 
 class TextElement(ParentElement):
@@ -647,9 +658,8 @@ class NumberVector(ParentProperty):
         super().setup_from_def(rconn, vector)
         perm = vector.get("perm")
         self._set_permission(perm)                 # ostensible Client controlability
-        self.timeout = vector.get("timeout", 0)   # worse-case time to affect, 0 default, N/A for ro
         for child in vector:
-            element = NumberElement()
+            element = NumberElement(self.timestamp, self.timeout)
             element.setup_from_def(child)
             self.elements[element.name] = element
 
@@ -661,13 +671,12 @@ class NumberVector(ParentProperty):
             return
         # the super call has set self._strattribs
         self.perm = self._strattribs["perm"]
-        self.timeout = self._strattribs["timeout"]
         # read the elements
         elements = rconn.smembers(key('elements', name, device))
         if not elements:
             return
         for element_name in elements:
-            element = NumberElement()
+            element = NumberElement(self.timestamp, self.timeout)
             element.setup_from_redis(rconn, device, name, element_name)
             if not element._status:
                 # failure to read the element
@@ -675,11 +684,6 @@ class NumberVector(ParentProperty):
             self.elements[element.name] = element
         self._status = True     # read status set to True, redis read successful
 
-
-    def update(self, rconn, vector):
-        "Update the object attributes and changed elements to redis"
-        self.timeout = vector.get("timeout", 0)
-        super().update(rconn, vector)
 
 
 
@@ -758,10 +762,9 @@ class SwitchVector(ParentProperty):
         perm = vector.get("perm")
         self._set_permission(perm)                          # ostensible Client controlability
         self.rule = vector.get("rule")                      # hint for GUI presentation (OneOfMany|AtMostOne|AnyOfMany)
-        self.timeout = vector.get("timeout", 0)   # worse-case time to affect, 0 default, N/A for ro
 
         for child in vector:
-            element = SwitchElement()
+            element = SwitchElement(self.timestamp, self.timeout)
             element.setup_from_def(child)
             self.elements[element.name] = element
 
@@ -774,13 +777,12 @@ class SwitchVector(ParentProperty):
         # the super call has set self._strattribs
         self.perm = self._strattribs["perm"]
         self.rule = self._strattribs["rule"]
-        self.timeout = self._strattribs["timeout"]
         # read the elements
         elements = rconn.smembers(key('elements', name, device))
         if not elements:
             return
         for element_name in elements:
-            element = SwitchElement()
+            element = SwitchElement(self.timestamp, self.timeout)
             element.setup_from_redis(rconn, device, name, element_name)
             if not element._status:
                 # failure to read the element
@@ -788,10 +790,6 @@ class SwitchVector(ParentProperty):
             self.elements[element.name] = element
         self._status = True     # read status set to True, redis read successful
 
-    def update(self, rconn, vector):
-        "Update the object attributes and changed elements to redis"
-        self.timeout = vector.get("timeout", 0)
-        super().update(rconn, vector)
 
     def _set_permission(self, permission):
         "Sets the possible permissions, Read-Only or Read-Write"
@@ -836,7 +834,7 @@ class LightVector(ParentProperty):
         super().setup_from_def(rconn, vector)
         self.perm = 'ro'                      # permission always Read-Only
         for child in vector:
-            element = LightElement()
+            element = LightElement(self.timestamp, self.timeout)
             element.setup_from_def(child)
             self.elements[element.name] = element
 
@@ -853,7 +851,7 @@ class LightVector(ParentProperty):
         if not elements:
             return
         for element_name in elements:
-            element = LightElement()
+            element = LightElement(self.timestamp, self.timeout)
             element.setup_from_redis(rconn, device, name, element_name)
             if not element._status:
                 # failure to read the element
@@ -895,7 +893,6 @@ class BLOBVector(ParentProperty):
         super().setup_from_def(rconn, vector)
         perm = vector.get("perm")
         self._set_permission(perm)                          # ostensible Client controlability
-        self.timeout = vector.get("timeout", 0)   # worse-case time to affect, 0 default, N/A for ro
         # as default blobs are disabled, check if this device is already known
         # in redis and if blobs were previously enabled
         attribs = self.get_attributes(rconn)
@@ -904,8 +901,8 @@ class BLOBVector(ParentProperty):
         else:
             self.blobs = "Disabled"
         for child in vector:
-            element = BLOBElement(self.timestamp)
-            element.setup_from_def(child, timestamp=self.timestamp)
+            element = BLOBElement(self.timestamp, self.timeout)
+            element.setup_from_def(child)
             # A defBLOB only has name and label, contents are empty, however if blobs are enabled
             # and this BLOB element has been previously defined, and a filepath saved in redis,
             # then get element pathname etc from redis
@@ -921,14 +918,13 @@ class BLOBVector(ParentProperty):
             return
         # the super call has set self._strattribs
         self.perm = self._strattribs["perm"]
-        self.timeout = self._strattribs["timeout"]
         self.blobs = self._strattribs["blobs"]
         # read the elements
         elements = rconn.smembers(key('elements', name, device))
         if not elements:
             return
         for element_name in elements:
-            element = BLOBElement(self.timestamp)
+            element = BLOBElement(self.timestamp, self.timeout)
             element.setup_from_redis(rconn, device, name, element_name)
             if not element._status:
                 # failure to read the element
@@ -958,11 +954,6 @@ class BLOBElement(ParentElement):
     "BLOB elements contained in a BLOBVector"
 
 
-    def __init__(self, timestamp):
-        "Adds timestamp to self, used for filenames"
-        super().__init__()
-        self.timestamp = timestamp
-
     def setup_from_def(self, child, **kwargs):
         "Set up element from xml"
         # A defBLOB only has name and label, contents are empty
@@ -972,8 +963,6 @@ class BLOBElement(ParentElement):
         self.size =  ""     # number of bytes in decoded and uncompressed BLOB
         self.format = ""    # format as a file suffix, eg: .z, .fits, .fits.z
         self.filepath = ""
-        if 'timestamp' in kwargs:
-            self.timestamp = kwargs["timestamp"]
 
 
     def setup_from_redis(self, rconn, device, name, element_name):
@@ -985,15 +974,14 @@ class BLOBElement(ParentElement):
         self.size = self._strattribs["size"]
         self.format = self._strattribs["format"]
         self.filepath = self._strattribs["filepath"]
-        self.timestamp = self._strattribs["timestamp"]
         self._status = True
 
-    def update(self, rconn, device, name, child, **kwargs):
+    def update(self, rconn, device, name, child, timestamp, timeout, **kwargs):
         "update the element, from a vector child, and write to redis"
+        self.timestamp = timestamp
+        self.timeout = timeout
         self.size = child.get("size")     # number of bytes in decoded and uncompressed BLOB
         self.format = child.get("format") # format as a file suffix, eg: .z, .fits, .fits.z
-        if 'timestamp' in kwargs:
-            self.timestamp = kwargs['timestamp']
         # If child.text, save standard_b64decode(child.text) to a file
         # and set the new filepath attribute of the element
         self.set_file(rconn, device, name, child)
