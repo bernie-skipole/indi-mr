@@ -293,7 +293,7 @@ def property_elements(rconn, redisserver, name, device):
 
 def logs(rconn, redisserver, number, *keys):
     """Return the number of logs as [[timestamp,data], ...] or empty list if none available
-    where timestamp is the time at which data is received, and data is a json string
+    where timestamp is the time at which data is received, and data is a list or dictionary
     of the data logged.
 
     The keys positional arguments define where the logs are sourced, so if just the literal string "devices"
@@ -309,7 +309,7 @@ def logs(rconn, redisserver, number, *keys):
     :type number: Integer
     :param keys: Defines which redis key is the source of the logs.
     :type keys: Positional arguments
-    :return: A list of lists, inner lists being [timestamp string, json data string]
+    :return: A list of lists, inner lists being [timestamp string, data list or dictionary]
     :rtype: List
     """
     if number < 1:
