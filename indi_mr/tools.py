@@ -519,7 +519,7 @@ def newnumbervector(rconn, redisserver, name, device, values, timestamp=None):
     for ename, number in values.items():
         ot = ET.Element('oneNumber')
         ot.set("name", ename)
-        ot.text = number
+        ot.text = str(number)
         nnv.append(ot)
     nnvstring = ET.tostring(nnv)
     try:
