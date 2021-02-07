@@ -22,7 +22,11 @@ Reading values
 
 .. autofunction:: indi_mr.tools.attributes_dict
 
+A description of property attributes is given at :ref:`property_atts`.
+
 .. autofunction:: indi_mr.tools.elements_dict
+
+A description of element attributes is given at  :ref:`element_atts`.
 
 .. autofunction:: indi_mr.tools.property_elements
 

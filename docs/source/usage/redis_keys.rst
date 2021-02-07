@@ -119,6 +119,8 @@ The log_lengths is a dictionary, of the form::
  
 If log_lengths is not given, the above defaults are used. The above indicates 5 logs will be retained in the list stored within logdata:devices, but 50 logs will be retained within logdata:elementattributes:<elementname>:<propertyname>:<devicename> where the property is a numbervector. Thus a log of the last 50 numbers are stored, as a history of number changes is more likely to be useful.
 
+.. _property_atts:
+
 Property Attributes
 ^^^^^^^^^^^^^^^^^^^
 
@@ -144,6 +146,7 @@ For the BlobsVector, an added value is:
 
 Enabled means that, for this property, setBLOBVector tags containing BLOB data may arrive on this connection, Disabled means they should not be received, though it is still possible for BLOBS to arrive via some other process.
     
+.. _element_atts:
 
 Element Attributes
 ^^^^^^^^^^^^^^^^^^
