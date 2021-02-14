@@ -105,6 +105,9 @@ def _driverstomqtt_on_connect(client, userdata, flags, rc):
         # and to snoop_data/mqtt_id
         client.subscribe( userdata["snoopdata"], 2 )
 
+        # Finally, send a getProperties to all devices, so they refresh data
+        userdata["datatodriver"].getproperties()
+
         print(f"""MQTT connected""")
     else:
         userdata['comms'] = False
@@ -627,6 +630,11 @@ class _DataToDriver:
             # so a devicename is specified, and the associated driver is known
             driver = self.devicedict[devicename]
             driver.append(data)
+
+    def getproperties(self):
+        "Sends getproperties to all drivers"
+        for driver in self.driverlist:
+            driver.append(b"<getProperties version=\"1.7\" />")
 
     def snoopdata(self, data, root):
         "Incoming snoop data from MQTT is added to the drivers inque"

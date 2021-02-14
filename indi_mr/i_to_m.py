@@ -105,6 +105,9 @@ def _inditomqtt_on_connect(client, userdata, flags, rc):
         # and to snoop_data/mqtt_id
         client.subscribe( userdata["snoopdata"], 2 )
 
+        # Finally, send a getProperties to all devices, so they refresh data
+        userdata['data_to_indi'].append(b"<getProperties version=\"1.7\" />")
+
         print(f"""MQTT connected""")
     else:
         userdata['comms'] = False
