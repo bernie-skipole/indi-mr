@@ -68,15 +68,44 @@ class SenderLoop():
         # the _handle method
 
         # blocks and listens to redis
+        startup = True
+        counter = 0
         while True:
-            message = ps.get_message()
+            message = ps.get_message()  # this calls self._handle via the subscribe above
             sleep(0.1)
+            if startup:
+                # When starting, we may need a getProperties sent to populate redis
+                # so after ten seconds, if no other messages being sent, and if no devices
+                # in redis, send a getProperties
+                if message:
+                    # a message is being sent, reset timer counter
+                    counter = 0
+                    continue
+                # if no data sent to drivers for ten seconds, check that devices have been seen,
+                counter += 1
+                if counter >= 100:
+                    # tens seconds passed, are there any devices:
+                    if self.rconn.smembers(self.keyprefix + "devices"):
+                        # there are devices in redis, continue without sending a getProperties
+                        # and these startup checks are no longer required
+                        counter = 0
+                        startup = False
+                        continue
+                    # so ten seconds passed, with no devices known, send a getProperties
+                    message = {'data':"<getProperties version=\"1.7\" />".encode("utf-8")}
+                    self._handle(message)
+                    counter = 0
+                    # timer is reset, and if no responses, this process will be repeated in another ten seconds
 
 
     def _handle(self, message):
         "data published by the client, to be sent to indiserver"
         # a message is published by the client, giving the command
+        if not message:
+            return
         data = message['data']
+        if data is None:
+            return
         try:
             root = ET.fromstring(data.decode("utf-8"))
         except Exception:
@@ -95,8 +124,7 @@ class SenderLoop():
         elif root.tag == "getProperties":
             self._set_timestamp(root)
         # and transmit the xml data via the sender object
-        if data is not None:
-            self.sender.append(data)
+        self.sender.append(data)
 
 
     def _set_busy(self, vector):
@@ -182,7 +210,7 @@ class SenderLoop():
 
 
     def _set_timestamp(self, vector):
-        "Set the redis timestamp keys when a getvector is sent"
+        "Set the redis timestamp keys when a getProperties is sent"
         device = vector.get("device")    # name of Device
         name = vector.get("name")    # name of property
         timestamp = datetime.utcnow().isoformat(timespec='seconds')
