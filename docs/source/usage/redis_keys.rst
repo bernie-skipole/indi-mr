@@ -97,11 +97,7 @@ A key is created for every element name, for every property name, for every devi
 Log Lengths
 ^^^^^^^^^^^
 
-When using the function inditoredis, the arguments are:
-
-inditoredis(indiserver, redisserver, log_lengths, blob_folder)
-
-The log_lengths is a dictionary, of the form::
+Those indi-mr functions which write data to redis have a 'log_lengths' argument which define how many logs of the format described above are kept. The log_lengths is a dictionary, of the form::
 
     log_lengths = {
                     'devices' : 5,
