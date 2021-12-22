@@ -32,9 +32,8 @@ _ENDTAGS = tuple(b'</' + tag + b'>' for tag in fromindi.TAGS)
 class _PortHandler:
     "Creates a connection and sends an receives to the indiserver port"
 
-    def __init__(self, loop, rconn, indiserver):
+    def __init__(self, rconn, indiserver):
         "Stores the argument values, and creates a collections.deque object"
-        self.loop = loop
         self.rconn = rconn
         self.indiserver = indiserver
         self.to_indi = collections.deque(maxlen=100)
@@ -90,7 +89,7 @@ class _PortHandler:
                 # either further children of this tag are coming, or maybe its a single tag ending in "/>"
                 if message.endswith(b'/>'):
                     # the message is complete, handle message here
-                    # Run 'fromindi.receive_from_indiserver' in the default loop's executor:
+                    # Run 'fromindi.receive_from_indiserver' in a thread:
                     try:
                         root = ET.fromstring(message.decode("utf-8"))
                     except Exception:
@@ -98,7 +97,7 @@ class _PortHandler:
                         message = b''
                         messagetagnumber = None
                         continue
-                    result = await self.loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
+                    result = await asyncio.to_thread(fromindi.receive_from_indiserver, message, root, self.rconn)
                     # result is None, or the device name if a defxxxx was received
                     # and start again, waiting for a new message
                     message = b''
@@ -110,7 +109,7 @@ class _PortHandler:
             message += data
             if message.endswith(_ENDTAGS[messagetagnumber]):
                 # the message is complete, handle message here
-                # Run 'fromindi.receive_from_indiserver' in the default loop's executor:
+                # Run 'fromindi.receive_from_indiserver' in a thread:
                 try:
                     root = ET.fromstring(message.decode("utf-8"))
                 except Exception:
@@ -118,7 +117,7 @@ class _PortHandler:
                     message = b''
                     messagetagnumber = None
                     continue
-                result = await self.loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
+                result = await asyncio.to_thread(fromindi.receive_from_indiserver, message, root, self.rconn)
                 # result is None, or the device name if a defxxxx was received
                 # and start again, waiting for a new message
                 message = b''
@@ -171,9 +170,7 @@ def inditoredis(indiserver, redisserver, log_lengths={}, blob_folder=''):
     # on startup, clear all redis keys
     tools.clearredis(rconn, redisserver)
 
-    # Now create a loop to tx and rx to the indiserver port
-    loop = asyncio.get_event_loop()
-    indiconnection = _PortHandler(loop, rconn, indiserver)
+    indiconnection = _PortHandler(rconn, indiserver)
 
     # Create a SenderLoop object, with the indiconnection.to_indi dequeue and redis connection
     senderloop = toindi.SenderLoop(indiconnection.to_indi, rconn, redisserver)
@@ -187,16 +184,13 @@ def inditoredis(indiserver, redisserver, log_lengths={}, blob_folder=''):
         indiconnection.to_indi.clear()
         indiconnection.to_indi.append(b'<getProperties version="1.7" />')
         try:
-            loop.run_until_complete(indiconnection.handle_data())
+            asyncio.run(indiconnection.handle_data())
         except ConnectionRefusedError:
             _message(rconn, f"Connection refused on {indiserver.host}:{indiserver.port}, re-trying...")
             sleep(5)
         except asyncio.IncompleteReadError:
             _message(rconn, f"Connection failed on {indiserver.host}:{indiserver.port}, re-trying...")
             sleep(5)
-        else:
-            loop.close()
-            break
 
 
 def _message(rconn, message):

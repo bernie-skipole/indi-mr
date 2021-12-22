@@ -15,6 +15,12 @@ The package does not include indiserver or drivers, but is compatable with them.
 
 Though INDI is generally used for astronomical instruments, it can work with any instrument if appropriate INDI drivers are available.
 
+Versions
+^^^^^^^^
+
+Version 0.3.0 requires Python 3.9 or later
+
+Version 0.2.6 should be used for Python versions prior to 3.9
 
 Installation
 ^^^^^^^^^^^^

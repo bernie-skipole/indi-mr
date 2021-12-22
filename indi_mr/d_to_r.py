@@ -34,9 +34,8 @@ _ENDTAGS = tuple(b'</' + tag + b'>' for tag in fromindi.TAGS)
 
 class _DriverHandler:
 
-    def __init__(self, loop, driverlist, devicedict, rconn):
+    def __init__(self, driverlist, devicedict, rconn):
         "Sets the data used by the data handler"
-        self.loop = loop
         self.devicedict = devicedict
         self.driverlist = driverlist
         self.rconn = rconn
@@ -111,8 +110,8 @@ class _DriverHandler:
                     # message to other drivers inque
                     driver.snoopsend(self.driverlist, message, root)
                     if driver.checkBlobs(root):
-                        # Run 'fromindi.receive_from_indiserver' in the default loop's executor:
-                        devicename = await self.loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
+                        # Run 'fromindi.receive_from_indiserver' in a thread:
+                        devicename = await asyncio.to_thread(fromindi.receive_from_indiserver, message, root, self.rconn)
                         # result is None, or the device name if a defxxxx was received
                         if devicename and (devicename not in self.devicedict):
                             self.devicedict[devicename] = driver
@@ -139,8 +138,8 @@ class _DriverHandler:
                 # message to other divers inque
                 driver.snoopsend(self.driverlist, message, root)
                 if driver.checkBlobs(root):
-                    # Run 'fromindi.receive_from_indiserver' in the default loop's executor:
-                    devicename = await self.loop.run_in_executor(None, fromindi.receive_from_indiserver, message, root, self.rconn)
+                    # Run 'fromindi.receive_from_indiserver' in a thread:
+                    devicename = await asyncio.to_thread(fromindi.receive_from_indiserver, message, root, self.rconn)
                     # result is None, or the device name if a defxxxx was received
                     if devicename and (devicename not in self.devicedict):
                         self.devicedict[devicename] = driver
@@ -237,20 +236,13 @@ def driverstoredis(drivers, redisserver, log_lengths={}, blob_folder=''):
     # and start senderloop in its thread
     run_sender.start()
 
-    # now start eventloop to read and write to the drivers
-    loop = asyncio.get_event_loop()
+    driverconnections = _DriverHandler(driverlist, devicedict, rconn)
 
-    driverconnections = _DriverHandler(loop, driverlist, devicedict, rconn)
-
-    while True:
-        try:
-            loop.run_until_complete(driverconnections.handle_data())
-        except FileNotFoundError as e:
-            _message(rconn, str(e))
-            sleep(2)
-            break
-        finally:
-            loop.close()
+    try:
+        asyncio.run(driverconnections.handle_data())
+    except FileNotFoundError as e:
+        _message(rconn, str(e))
+        sleep(2)
 
 
 def _message(rconn, message):

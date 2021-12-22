@@ -128,10 +128,9 @@ def _sendtomqtt(payload, topic, mqtt_client):
 
 class _PortHandler:
 
-    def __init__(self, loop, userdata, mqtt_client, indiserver):
+    def __init__(self, userdata, mqtt_client, indiserver):
         "Sets the userdata"
         self.userdata = userdata
-        self.loop = loop
         self.mqtt_client = mqtt_client
         self.indiserver = indiserver
         self.topic = userdata["from_indi_topic"] + "/" + userdata["mqtt_id"]
@@ -183,7 +182,7 @@ class _PortHandler:
                     # check if data received is a b'<getProperties ... />' snooping request
                     if data.startswith(b'<getProperties '):
                         # send a snoop request on topic snoop_control/mqtt_id where mqtt_id is its own id
-                        result = await self.loop.run_in_executor(None, _sendtomqtt, data, self.userdata["pubsnoopcontrol"], self.mqtt_client)
+                        result = await asyncio.to_thread(_sendtomqtt, data, self.userdata["pubsnoopcontrol"], self.mqtt_client)
                     # data is either a getProperties, or does not start with a recognised tag, so ignore it
                     # and continue waiting for a valid message start
                     continue
@@ -200,26 +199,26 @@ class _PortHandler:
                         messagetagnumber = None
                         continue
                     devicename = root.get("device")
-                    # Run '_sendtomqtt' in the default loop's executor:
-                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, self.topic, self.mqtt_client)
+                    # Run '_sendtomqtt' in a thread:
+                    result = await asyncio.to_thread(_sendtomqtt, message, self.topic, self.mqtt_client)
                     # check if this data it to be sent to snooping devices
                     for mqtt_id in self.sendsnoopall:
                         # these connections snoop everything
                         snooptopic = self.snoop_data_topic + mqtt_id
-                        result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                        result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                     if devicename in self.deviceset:
                         if devicename in self.sendsnoopdevices:
                             # set of mqtt_id's which snoop this devicename
                             for mqtt_id in self.sendsnoopdevices[devicename]:
                                 snooptopic = self.snoop_data_topic + mqtt_id
-                                result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                         propertyname = root.get("name")
                         if propertyname:
                             if (devicename,propertyname) in self.sendsnoopproperties:
                                 # set of mqtt_id's which snoop this devicename/propertyname
                                 for mqtt_id in self.sendsnoopproperties[devicename,propertyname]:
                                     snooptopic = self.snoop_data_topic + mqtt_id
-                                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                    result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                     # and start again, waiting for a new message
                     if devicename:
                         self.deviceset.add(devicename)
@@ -243,26 +242,26 @@ class _PortHandler:
                     messagetagnumber = None
                     continue
                 devicename = root.get("device")
-                # Run '_sendtomqtt' in the default loop's executor:
-                result = await self.loop.run_in_executor(None, _sendtomqtt, message, self.topic, self.mqtt_client)
+                # Run '_sendtomqtt' in thread:
+                result = await asyncio.to_thread(_sendtomqtt, message, self.topic, self.mqtt_client)
                 # check if this data it to be sent to snooping devices
                 for mqtt_id in self.sendsnoopall:
                     # these connections snoop everything
                     snooptopic = self.snoop_data_topic + mqtt_id
-                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                    result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                 if devicename in self.deviceset:
                     if devicename in self.sendsnoopdevices:
                         # set of mqtt_id's which snoop this devicename
                         for mqtt_id in self.sendsnoopdevices[devicename]:
                             snooptopic = self.snoop_data_topic + mqtt_id
-                            result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                            result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                     propertyname = root.get("name")
                     if propertyname:
                         if (devicename,propertyname) in self.sendsnoopproperties:
                             # set of mqtt_id's which snoop this devicename/propertyname
                             for mqtt_id in self.sendsnoopproperties[devicename,propertyname]:
                                 snooptopic = self.snoop_data_topic + mqtt_id
-                                result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                 # and start again, waiting for a new message
                 if devicename:
                     self.deviceset.add(devicename)
@@ -345,25 +344,19 @@ def inditomqtt(indiserver, mqtt_id, mqttserver, subscribe_list=[]):
     mqtt_client.connect(host=mqttserver.host, port=mqttserver.port)
     mqtt_client.loop_start()
 
-    # Now create a loop to tx and rx the indiserver port
-    loop = asyncio.get_event_loop()
-
-    indiconnection = _PortHandler(loop, userdata, mqtt_client, indiserver)
+    indiconnection = _PortHandler(userdata, mqtt_client, indiserver)
 
     while True:
         data_to_indi.clear()
         data_to_indi.append(b'<getProperties version="1.7" />')
         try:
-            loop.run_until_complete(indiconnection.handle_data())
+            asyncio.run(indiconnection.handle_data())
         except ConnectionRefusedError:
             _message(mqttserver.from_indi_topic + "/" + mqtt_id, mqtt_client, f"Connection refused on {indiserver.host}:{indiserver.port}, re-trying...")
             sleep(5)
         except asyncio.IncompleteReadError:
             _message(mqttserver.from_indi_topic + "/" + mqtt_id, mqtt_client, f"Connection failed on {indiserver.host}:{indiserver.port}, re-trying...")
             sleep(5)
-        else:
-            loop.close()
-            break
 
 
 def _message(topic, mqtt_client, message):

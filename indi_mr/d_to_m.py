@@ -127,10 +127,9 @@ def _sendtomqtt(payload, topic, mqtt_client):
 
 class _DriverHandler:
 
-    def __init__(self, loop, userdata, mqtt_client):
+    def __init__(self, userdata, mqtt_client):
         "Sets the userdata"
         self.userdata = userdata
-        self.loop = loop
         self.mqtt_client = mqtt_client
         self.topic = userdata["from_indi_topic"] + "/" + userdata["mqtt_id"]
         self.snoop_data_topic = userdata["snoop_data_topic"] + "/"                 # this will always have a remote mqtt_id appended
@@ -197,7 +196,7 @@ class _DriverHandler:
                             # its a local devicename, so no need to send getproperties to mqtt, continue with next message
                             continue                    
                         # send a snoop request on topic snoop_control/mqtt_id where mqtt_id is its own id
-                        result = await self.loop.run_in_executor(None, _sendtomqtt, data, self.userdata["pubsnoopcontrol"], self.mqtt_client)
+                        result = await asyncio.to_thread(_sendtomqtt, data, self.userdata["pubsnoopcontrol"], self.mqtt_client)
                     # data is either a getProperties, or does not start with a recognised tag, so ignore it
                     # and continue waiting for a valid message start
                     continue
@@ -216,8 +215,8 @@ class _DriverHandler:
                     # check if this driver is allowed to send BLOBs, or only send BLOBS
                     if driver.checkBlobs(root):
                         devicename = root.get("device")
-                        # Run '_sendtomqtt' in the default loop's executor:
-                        result = await self.loop.run_in_executor(None, _sendtomqtt, message, self.topic, self.mqtt_client)
+                        # Run '_sendtomqtt' in a thread:
+                        result = await asyncio.to_thread(_sendtomqtt, message, self.topic, self.mqtt_client)
                         # if this is to be sent to other drivers via snooping mechanism, then copy the read
                         # message to other drivers inque
                         driver.snoopsend(self.driverlist, message, root)
@@ -225,20 +224,20 @@ class _DriverHandler:
                         for mqtt_id in self.sendsnoopall:
                             # these connections snoop everything
                             snooptopic = self.snoop_data_topic + mqtt_id
-                            result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                            result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                         if devicename in self.devicedict:
                             if devicename in self.sendsnoopdevices:
                                 # list of mqtt_id's which snoop this devicename
                                 for mqtt_id in self.sendsnoopdevices[devicename]:
                                     snooptopic = self.snoop_data_topic + mqtt_id
-                                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                    result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                             propertyname = root.get("name")
                             if propertyname:
                                 if (devicename,propertyname) in self.sendsnoopproperties:
                                     # list of mqtt_id's which snoop this devicename/propertyname
                                     for mqtt_id in self.sendsnoopproperties[devicename,propertyname]:
                                         snooptopic = self.snoop_data_topic + mqtt_id
-                                        result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                        result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                     # and start again, waiting for a new message
                     if devicename and (devicename not in self.devicedict):
                         self.devicedict[devicename] = driver
@@ -263,8 +262,8 @@ class _DriverHandler:
                     continue
                 if driver.checkBlobs(root):
                     devicename = root.get("device")
-                    # Run '_sendtomqtt' in the default loop's executor:
-                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, self.topic, self.mqtt_client)
+                    # Run '_sendtomqtt' in a thread:
+                    result = await asyncio.to_thread(_sendtomqtt, message, self.topic, self.mqtt_client)
                     # if this is to be sent to other drivers via snooping mechanism, then copy the read
                     # message to other drivers inque
                     driver.snoopsend(self.driverlist, message, root)
@@ -272,21 +271,21 @@ class _DriverHandler:
                     for mqtt_id in self.sendsnoopall:
                         # these connections snoop everything
                         snooptopic = self.snoop_data_topic + mqtt_id
-                        result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                        result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                     if devicename in self.devicedict:
                         # find the connections which snoop this devicename
                         if devicename in self.sendsnoopdevices:
                             # list of mqtt_id's which snoop this devicename
                             for mqtt_id in self.sendsnoopdevices[devicename]:
                                 snooptopic = self.snoop_data_topic + mqtt_id
-                                result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                         propertyname = root.get("name")
                         if propertyname:
                             if (devicename,propertyname) in self.sendsnoopproperties:
                                 # list of mqtt_id's which snoop this devicename/propertyname
                                 for mqtt_id in self.sendsnoopproperties[devicename,propertyname]:
                                     snooptopic = self.snoop_data_topic + mqtt_id
-                                    result = await self.loop.run_in_executor(None, _sendtomqtt, message, snooptopic, self.mqtt_client)
+                                    result = await asyncio.to_thread(_sendtomqtt, message, snooptopic, self.mqtt_client)
                 # and start again, waiting for a new message
                 if devicename and (devicename not in self.devicedict):
                     self.devicedict[devicename] = driver
@@ -394,21 +393,14 @@ def driverstomqtt(drivers, mqtt_id, mqttserver, subscribe_list=[]):
     mqtt_client.connect(host=mqttserver.host, port=mqttserver.port)
     mqtt_client.loop_start()
 
-    # now start eventloop to read and write to the drivers
-    loop = asyncio.get_event_loop()
+    driverconnections = _DriverHandler(userdata, mqtt_client)
 
-    driverconnections = _DriverHandler(loop, userdata, mqtt_client)
+    try:
+        asyncio.run(driverconnections.handle_data())
+    except FileNotFoundError as e:
+        _message(userdata["from_indi_topic"] + "/" + userdata["mqtt_id"], mqtt_client, str(e))
+        sleep(2)
 
-
-    while True:
-        try:
-            loop.run_until_complete(driverconnections.handle_data())
-        except FileNotFoundError as e:
-            _message(userdata["from_indi_topic"] + "/" + userdata["mqtt_id"], mqtt_client, str(e))
-            sleep(2)
-            break
-        finally:
-            loop.close()
 
 
 def _message(topic, mqtt_client, message):

@@ -182,12 +182,11 @@ class _Connections:
 
 class _SocketHandler:
 
-    def __init__(self, mqtt_client, userdata, loop):
+    def __init__(self, mqtt_client, userdata):
         "Sets the mqtt client and topic"
         self.mqtt_client = mqtt_client
         self.topic = userdata["to_indi_topic"] + "/" + userdata["mqtt_id"]
         self.userdata = userdata
-        self.loop = loop
         # self.connections holds data received from MQTT
         self.connections = userdata["connections"]
 
@@ -204,10 +203,8 @@ class _SocketHandler:
         # set a new connection into self.connections
         connum = self.connections.new_connection()
         # connum is an integer, connection number, referring to the connection
-        sent = self.txtoport(writer, connum)
-        received = self.rxfromport(reader, connum)
-        task_sent = asyncio.ensure_future(sent)         ##### later python versions do not use ensure_future here
-        task_received = asyncio.ensure_future(received)
+        task_sent = asyncio.create_task(self.txtoport(writer, connum))
+        task_received = asyncio.create_task(self.rxfromport(reader, connum))
         try:
             await asyncio.gather(task_sent, task_received)
         except Exception as e:
@@ -259,7 +256,7 @@ class _SocketHandler:
                 # either further children of this tag are coming, or maybe its a single tag ending in "/>"
                 if message.endswith(b'/>'):
                     # the message is complete, handle message here
-                    result = await self.loop.run_in_executor(None, self.sendtomqtt, message)
+                    result = await asyncio.to_thread(self.sendtomqtt, message)
                     # and start again, waiting for a new message
                     message = b''
                     messagetagnumber = None
@@ -274,11 +271,19 @@ class _SocketHandler:
                     # enableBLOB has arrived, record the instruction
                     self.connections.set_enableBLOB(connum, message)
                 # and send to the MQTT network
-                result = await self.loop.run_in_executor(None, self.sendtomqtt, message)
+                result = await asyncio.to_thread(self.sendtomqtt, message)
                 # and start again, waiting for a new message
                 message = b''
                 messagetagnumber = None
 
+
+
+async def _serveindi(mqtt_client, userdata, port):
+    """Called by asyncio.run to start the server"""
+    handler = _SocketHandler(mqtt_client, userdata)
+    server = await asyncio.start_server(handler.handle_data, 'localhost', port)
+    print(f'Serving on {port}')
+    await server.serve_forever()
 
 
 def mqtttoport(mqtt_id, mqttserver, subscribe_list=[], port=7624):
@@ -341,28 +346,9 @@ def mqtttoport(mqtt_id, mqttserver, subscribe_list=[], port=7624):
     mqtt_client.loop_start()
     print("MQTT loop started")
 
+    # run the indi server port
+    asyncio.run(_serveindi(mqtt_client, userdata, port))
 
-    # event loop for reading/writing to the port
-    loop = asyncio.get_event_loop()
-
-    # create a socket handler, the handle_data method of this instance will
-    # be the callback used by asyncio.start_server
-    handler = _SocketHandler(mqtt_client, userdata, loop)
-    coro = asyncio.start_server(handler.handle_data, 'localhost', port, loop=loop)
-    server = loop.run_until_complete(coro)
-
-    # Serve requests until Ctrl+C is pressed
-    print('Serving on {}'.format(server.sockets[0].getsockname()))
-    while True:
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            break
-
-    # Close the server
-    server.close()
-    loop.run_until_complete(server.wait_closed())
-    loop.close()
 
 
 
