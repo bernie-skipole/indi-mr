@@ -2,9 +2,9 @@
 """
 Defines functions to set the indi, redis and mqtt server parameters.
 
-IndiServer
-RedisServer
-MQTTServer
+indi_server
+redis_server
+mqtt_server
 
 These three functions set up server parameters such as host, port,
 passwords etc, and return named tuples which are then used as arguments
