@@ -51,7 +51,7 @@ from .m_to_p import mqtttoport
 from .d_to_r import driverstoredis
 from .d_to_m import driverstomqtt
 
-version = "0.3.0"
+version = "0.4.0"
 
 # define namedtuples to hold server parameters
 

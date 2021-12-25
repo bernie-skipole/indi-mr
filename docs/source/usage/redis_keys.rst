@@ -31,15 +31,15 @@ Stored current values
 
 **devices**
 
-A set of device names.
+A list of device names.
 
 **properties:<devicename>**
 
-A key is created for each device name, for example, properties:telescope, properties:dome, etc., Each stores a set of property names for that particular device.
+A key is created for each device name, for example, properties:telescope, properties:dome, etc., Each stores a list of property names for that particular device.
 
 **attributes:<propertyname>:<devicename>**
 
-A key is created for every property name, for every device name. Each key stores a hash table of attributes:values for that property, device.
+A key is created for every property name, for every device name. Each key stores a dictionary of attributes:values for that property, device.
 
 **messages**
 
@@ -51,22 +51,22 @@ A key is created for each device name. Each key stores a string of "timestamp sp
 
 **elements:<propertyname>:<devicename>**
 
-A key is created for every property name, for every device name. Each key stores a set of element names for the device property.
+A key is created for every property name, for every device name. Each key stores a list of element names for the device property.
 
 **elementattributes:<elementname>:<propertyname>:<devicename>**
 
-A key is created for every element name, for every property name, for every device name. Each key stores a hash table of attributes:values for the element.
+A key is created for every element name, for every property name, for every device name. Each key stores a dictionary of attributes:values for the element.
 
 .. _logs:
 
 Stored logged values
 ^^^^^^^^^^^^^^^^^^^^
 
-As well as the current values stored above, as values change, a history of data is stored within keys listed here. Each log is stored as a list of strings, each string being of the format Timestamp space datastring.  This Timestamp is the time at which the data was received (Not timestamps given in the protocol - though they will be included within the data string where given). The datastrings are JSON strings of the data.
+As well as the current values stored above, as values change, a history of data is stored within keys listed here. Each log is stored as a redis stream of {'timestamp':timestamp string, 'datastring': JSON string of data}. The timestamp is the time at which the data was received, not timestamps given in the protocol - though they will be included within the JSON data string where given.
 
 **logdata:devices**
 
-Each datastring is a JSON list of device names. This rarely changes during normal operation, but new logs will be created as new devices are defined, and as devices are deleted. Therefore each log will be a string of the format "Timestamp [device1, device2, ...]" and as new logs are created LPUSH is used to add to the list. Use LINDEX logdata:devices 0 to obtain the most recent log entry.
+Each datastring is a JSON list of device names. This rarely changes during normal operation, but new logs will be created as new devices are defined, and as devices are deleted. Therefore each log will have a datastring of the format "[device1, device2, ...]".
 
 **logdata:properties:<devicename>**
 
@@ -74,11 +74,11 @@ A key is created for each device name. The datastring for each log is a JSON str
 
 **logdata:attributes:<propertyname>:<devicename>**
 
-A key is created for every property name, for every device name. The datastring for each log is a JSON string of an attribute object for the given property and device.
+A key is created for every property name, for every device name. The datastring for each log is a JSON string of an attribute dictionary for the given property and device.
 
 **logdata:messages**
 
-Each datastring is a JSON string of the list [timestamp, message] for messages received without a specified device. Therefore each log will be of the format "Timestamp [timestamp, message]" where the first Timestamp is the time at which the message is received, and the message timestamp is that given within the indi protocol.
+Each datastring is a JSON string of the list [timestamp, message] for messages received without a specified device. The message timestamp is that given within the indi protocol.
 
 **logdata:devicemessages:<devicename>**
 
@@ -90,7 +90,7 @@ A key is created for every property name, for every device name. The datastring 
 
 **logdata:elementattributes:<elementname>:<propertyname>:<devicename>**
 
-A key is created for every element name, for every property name, for every device name. Each key stores a a JSON string of an attribute object for the element.
+A key is created for every element name, for every property name, for every device name. The datastring for each log is a JSON string of an attribute dictionary for the element.
 
 .. _log_lengths:
 
@@ -113,14 +113,14 @@ Those indi-mr functions which write data to redis have a 'log_lengths' argument 
                   }
 
  
-If log_lengths is not given, the above defaults are used. The above indicates 5 logs will be retained in the list stored within logdata:devices, but 50 logs will be retained within logdata:elementattributes:<elementname>:<propertyname>:<devicename> where the property is a numbervector. Thus a log of the last 50 numbers are stored, as a history of number changes is more likely to be useful.
+If log_lengths is not given, the above defaults are used. The above indicates 5 logs will be retained in the redis stream of logdata:devices, but 50 logs will be retained within logdata:elementattributes:<elementname>:<propertyname>:<devicename> where the property is a numbervector. Thus a log of the last 50 numbers are stored, as a history of number changes is more likely to be useful.
 
 .. _property_atts:
 
 Property Attributes
 ^^^^^^^^^^^^^^^^^^^
 
-The keys attributes:<propertyname>:<devicename> each hold a hash table of attributes of the property. For all properties this is:
+The keys attributes:<propertyname>:<devicename> each hold a dictionary of attributes of the property. For all properties this is:
 
     * device : name of device
     * name : name of property
@@ -147,7 +147,7 @@ Enabled means that, for this property, setBLOBVector tags containing BLOB data m
 Element Attributes
 ^^^^^^^^^^^^^^^^^^
 
-The keys elementattributes:<elementname>:<propertyname>:<devicename> hold a hash table of attributes of the element. For all elements apart from Blob elements this is:
+The keys elementattributes:<elementname>:<propertyname>:<devicename> hold a dictionary of attributes of the element. For all elements apart from Blob elements this is:
 
     * name : name of the element
     * label : GUI label for the element

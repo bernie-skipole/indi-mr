@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="indi-mr",
-    version="0.3.0",
+    version="0.4.0",
     author="Bernard Czenkusz",
     author_email="bernie@skipole.co.uk",
     description="INDI - MQTT - REDIS - provides functions for transferring the INDI protocol via MQTT and converting to redis storage, with tools to read/write to redis and hence control remote instruments.",

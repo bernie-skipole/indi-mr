@@ -221,6 +221,43 @@ def key(*keys):
     return _KEYPREFIX + ":".join(keys)
 
 
+def _updatelog(rconn, timestamp, logkey, maxlen, newdata):
+    "Updates the log stream if the newdata is different to the current last log entry"
+    logentry = rconn.xrevrange(logkey, max='+', min='-', count=1)
+    if logentry:
+        # logentry is the last log, and is a list of one log
+        # [(id, {b"timestamp":timestamp, b"datastring":datastring})]
+        datastring = logentry[0][1][b"datastring"].decode("utf-8")
+        olddata = json.loads(datastring)
+        if olddatadict != newdata:
+            # there has been a change in the data, so create a log
+            rconn.xadd(logkey, {"timestamp": timestamp,
+                                "datastring": json.dumps(newdata)}, maxlen=maxlen)
+    else:
+        # no logs currently exist, simply write the newdata
+        rconn.xadd(logkey, {"timestamp": timestamp,
+                            "datastring": json.dumps(newdata)}, maxlen=maxlen)
+
+
+def _updatelogset(rconn, timestamp, logkey, maxlen, newdataset):
+    """"Updates the log stream if the newdataset is different to the current last log entry
+        Sets are used to ensure unique items, and sets can be compared without comparing the order"""
+    logentry = rconn.xrevrange(logkey, max='+', min='-', count=1)
+    if logentry:
+        # logentry is the last log, and is a list of one log
+        # [(id, {b"timestamp":timestamp, b"datastring":datastring})]
+        datastring = logentry[0][1][b"datastring"].decode("utf-8")
+        olddataset = set(json.loads(datastring))
+        if olddataset != newdataset:
+            # there has been a change in the dataset, so create a log
+            rconn.xadd(logkey, {"timestamp": timestamp,
+                                "datastring": json.dumps(list(newdataset))}, maxlen=maxlen)
+    else:
+        # no logs currently exist, simply write the newdataset
+        rconn.xadd(logkey, {"timestamp": timestamp,
+                            "datastring": json.dumps(list(newdataset))}, maxlen=maxlen)
+
+
 
 ############# Define properties
 
@@ -343,96 +380,39 @@ class ParentProperty():
             rconn.sadd(key('elements', self.name, self.device), elementname)   # add element name to 'elements:<propertyname>:<devicename>'
 
 
+
     def log(self, rconn, timestamp):
         "Reads last log entry in redis for this object, and, if changed, logs change with the given timestamp"
         global _LOGLENGTHS
-        # log changes in devices to logdata:devices
+
+        # log changes in SET of devices to logdata:devices
         deviceset = self.get_devices(rconn)
         logkey = key("logdata", "devices")
-        logentry = rconn.lindex(logkey, 0)   # gets last log entry
-        if logentry is None:
-            newstring = timestamp + " " + json.dumps(list(deviceset))
-            rconn.lpush(logkey, newstring)
-        else:
-            # Get the last log
-            logtime, logdevices = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_devices_list"
-            logdeviceset = set(json.loads(logdevices))
-            if logdeviceset != deviceset:
-                # there has been a change in the devices
-                newstring = timestamp + " " + json.dumps(list(deviceset))
-                rconn.lpush(logkey, newstring)
-                # and limit number of logs
-                rconn.ltrim(logkey, 0, _LOGLENGTHS['devices'])
-        # log changes in property names to logdata:properties:<devicename>
+        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
+
+        # log changes in SET of property names to logdata:properties:<devicename>
         propertyset = self.get_properties(rconn)
         logkey = key("logdata", 'properties', self.device)
-        logentry = rconn.lindex(logkey, 0)   # gets last log entry
-        if logentry is None:
-            newstring = timestamp + " " + json.dumps(list(propertyset))
-            rconn.lpush(logkey, newstring)
-        else:
-            # Get the last log
-            logtime, logproperties = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_properties_list"
-            logpropertyset = set(json.loads(logproperties))
-            if logpropertyset != propertyset:
-                # there has been a change in the properties
-                newstring = timestamp + " " + json.dumps(list(propertyset))
-                rconn.lpush(logkey, newstring)
-                # and limit number of logs
-                rconn.ltrim(logkey, 0, _LOGLENGTHS['properties'])
-        # log changes in attributes to logdata:attributes:<propertyname>:<devicename>
+        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
+
+        # log changes in DICT of attributes to logdata:attributes:<propertyname>:<devicename>
         attdict = self.get_attributes(rconn)
         logkey = key("logdata", 'attributes',self.name,self.device)
-        logentry = rconn.lindex(logkey, 0)   # gets last log entry
-        if logentry is None:
-            newstring = timestamp + " " + json.dumps(attdict)
-            rconn.lpush(logkey, newstring)
-        else:
-            # Get the last log
-            logtime, logattributes = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_attributes_dict"
-            logattdict = json.loads(logattributes)
-            if logattdict != attdict:
-                # there has been a change in the attributes
-                newstring = timestamp + " " + json.dumps(attdict)
-                rconn.lpush(logkey, newstring)
-                # and limit number of logs
-                rconn.ltrim(logkey, 0, _LOGLENGTHS['attributes'])
-        # log changes in element names to logdata:elements:<propertyname>:<devicename>
+        _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['attributes'], attdict)
+
+        # log changes in SET of element names to logdata:elements:<propertyname>:<devicename>
         elementset = self.get_elements(rconn)
         logkey = key("logdata", 'elements',self.name,self.device)
-        logentry = rconn.lindex(logkey, 0)   # gets last log entry
-        if logentry is None:
-            newstring = timestamp + " " + json.dumps(list(elementset))
-            rconn.lpush(logkey, newstring)
-        else:
-            # Get the last log
-            logtime, logelements = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_elements_list"
-            logelementset = set(json.loads(logelements))
-            if logelementset != elementset:
-                # there has been a change in the elements
-                newstring = timestamp + " " + json.dumps(list(elementset))
-                rconn.lpush(logkey, newstring)
-                # and limit number of logs
-                rconn.ltrim(logkey, 0, _LOGLENGTHS['elements'])
+        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['elements'], elementset)
+
         # log changes in element attributes
+        loglengthvector = self.vector.lower()
         for element in self.elements.values():
             # log changes in attributes to logdata:elementattributes:<elementname>:<propertyname>:<devicename>
             elattdict = self.get_elements_dict(rconn, element.name)
             logkey = key("logdata", 'elementattributes',element.name, self.name, self.device)
-            logentry = rconn.lindex(logkey, 0)   # gets last log entry
-            if logentry is None:
-                newstring = timestamp + " " + json.dumps(elattdict)
-                rconn.lpush(logkey, newstring)
-            else:
-                # Get the last log
-                logtime, logelattributes = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_element_attributes_dict"
-                logelattdict = json.loads(logelattributes)
-                if logelattdict != elattdict:
-                    # there has been a change in the element attributes
-                    newstring = timestamp + " " + json.dumps(elattdict)
-                    rconn.lpush(logkey, newstring)
-                    # and limit number of logs
-                    rconn.ltrim(logkey, 0, _LOGLENGTHS[self.vector.lower()])
+            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS[loglengthvector], elattdict)
+
 
 
     @classmethod
@@ -1081,24 +1061,13 @@ class Message():
         messagelist = self.get_message(rconn, device=self.device)
         if not messagelist:
             return
+        # messagelist is [timestamp, message] in which timestamp is the message timestamp, not the log timestamp
         if self.device:
             logkey = key("logdata", "devicemessages", self.device)
         else:
             logkey = key("logdata", "messages")
-        logentry = rconn.lindex(logkey, 0)   # gets last log entry
-        if logentry is None:
-            newstring = timestamp + " " + json.dumps(messagelist)
-            rconn.lpush(logkey, newstring)
-        else:
-            # Get the last log
-            logtime, logmessage = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_[timestamp message]"
-            logmessagelist = json.loads(logmessage)
-            if logmessagelist != messagelist:
-                # there has been a change in the message
-                newstring = timestamp + " " + json.dumps(messagelist)
-                rconn.lpush(logkey, newstring)
-                # and limit number of logs
-                rconn.ltrim(logkey, 0, _LOGLENGTHS['messages'])
+        _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+
 
     def __str__(self):
         return self.message
@@ -1181,76 +1150,28 @@ class delProperty():
             else:
                 propertyset = set(p.decode("utf-8") for p in propertysetfromredis)
             logkey = key("logdata", 'properties', self.device)
-            logentry = rconn.lindex(logkey, 0)   # gets last log entry
-            if logentry is None:
-                newstring = timestamp + " " + json.dumps(list(propertyset))
-                rconn.lpush(logkey, newstring)
-            else:
-                # Get the last log
-                logtime, logproperties = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_properties_list"
-                logpropertyset = set(json.loads(logproperties))
-                if logpropertyset != propertyset:
-                    # there has been a change in the properties
-                    newstring = timestamp + " " + json.dumps(list(propertyset))
-                    rconn.lpush(logkey, newstring)
-                    # and limit number of logs
-                    rconn.ltrim(logkey, 0, _LOGLENGTHS['properties'])
+            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
+
             # log changes in messages to logdata:devicemessages:<devicename>
             messagelist = Message.get_message(rconn, device=self.device)
             if not messagelist:
                 return
             logkey = key("logdata", "devicemessages", self.device)
-            logentry = rconn.lindex(logkey, 0)   # gets last log entry
-            if logentry is None:
-                newstring = timestamp + " " + json.dumps(messagelist)
-                rconn.lpush(logkey, newstring)
-            else:
-                # Get the last log
-                logtime, logmessage = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_[timestamp message]"
-                logmessagelist = json.loads(logmessage)
-                if logmessagelist != messagelist:
-                    # there has been a change in the message
-                    newstring = timestamp + " " + json.dumps(messagelist)
-                    rconn.lpush(logkey, newstring)
-                    # and limit number of logs
-                    rconn.ltrim(logkey, 0, _LOGLENGTHS['messages'])
+            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+
         else:
             # no property name, so an entire device has been wiped
             # log changes in devices to logdata:devices
             deviceset = ParentProperty.get_devices(rconn)
             logkey = key("logdata", "devices")
-            logentry = rconn.lindex(logkey, 0)   # gets last log entry
-            if logentry is None:
-                newstring = timestamp + " " + json.dumps(list(deviceset))
-                rconn.lpush(logkey, newstring)
-            else:
-                # Get the last log
-                logtime, logdevices = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_devices_list"
-                logdeviceset = set(json.loads(logdevices))
-                if logdeviceset != deviceset:
-                    # there has been a change in the devices
-                    newstring = timestamp + " " + json.dumps(list(deviceset))
-                    rconn.lpush(logkey, newstring)
-                    # and limit number of logs
-                    rconn.ltrim(logkey, 0, _LOGLENGTHS['devices'])
-            # log changes in messages to logdata:messages
+            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
+
+             # log changes in messages to logdata:messages
             messagelist = Message.get_message(rconn)
             if not messagelist:
                 return
             logkey = key("logdata", "messages")
-            logentry = rconn.lindex(logkey, 0)   # gets last log entry
-            if logentry is None:
-                newstring = timestamp + " " + json.dumps(messagelist)
-                rconn.lpush(logkey, newstring)
-            else:
-                # Get the last log
-                logtime, logmessage = logentry.decode("utf-8").split(" ", maxsplit=1)  # decode b"timestamp json_string_of_[timestamp message]"
-                logmessagelist = json.loads(logmessage)
-                if logmessagelist != messagelist:
-                    # there has been a change in the message
-                    newstring = timestamp + " " + json.dumps(messagelist)
-                    rconn.lpush(logkey, newstring)
-                    # and limit number of logs
-                    rconn.ltrim(logkey, 0, _LOGLENGTHS['messages'])
+            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+ 
 
 

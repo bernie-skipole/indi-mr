@@ -294,7 +294,7 @@ def property_elements(rconn, redisserver, name, device):
 def logs(rconn, redisserver, number, *keys):
     """Return the number of logs as [[timestamp,data], ...] or empty list if none available
     where timestamp is the time at which data is received, and data is a list or dictionary
-    of the data logged.
+    of the data logged. The first item in the list is the latest item received.
 
     The keys positional arguments define where the logs are sourced, so if just the literal string "devices"
     the logs will come from "logdata:devices", if arguments are 'elementattributes', elementname, propertyname,
@@ -315,22 +315,20 @@ def logs(rconn, redisserver, number, *keys):
     if number < 1:
         return []
     logkey = _key(redisserver, "logdata", *keys)
-    if number == 1:
-        logentry = rconn.lindex(logkey, 0)
-        if logentry is None:
-            return []
-        logtime, logdata = logentry.decode("utf-8").split(" ", maxsplit=1)
-        logdata = json.loads(logdata)
-        return [[logtime,logdata]]
-    logs = rconn.lrange(logkey, 0, number-1)
-    if logs is None:
+    logs = rconn.xrevrange(logkey, max='+', min='-', count=number)
+    if logs:
+        nlogs = []
+        for logentry in logs:
+            # logentry is of the form
+            # (id, {b"timestamp":timestamp, b"datastring":datastring})
+            timestring = logentry[1][b"timestamp"].decode("utf-8")
+            datastring = logentry[1][b"datastring"].decode("utf-8")
+            logdata = json.loads(datastring)
+            nlogs.append([timestring,logdata])
+        return nlogs
+    else:
         return []
-    nlogs = []
-    for logentry in logs:
-        logtime, logdata = logentry.decode("utf-8").split(" ", maxsplit=1)
-        logdata = json.loads(logdata)
-        nlogs.append([logtime,logdata])
-    return nlogs
+
 
 
 # The following functions create the XML elements, and uses redis to publish the XML on the to_indi_channel.
@@ -639,26 +637,19 @@ def clearredis(rconn, redisserver):
     rconn.delete( _key(redisserver, "getProperties") )
     device_list = devices(rconn, redisserver)
     rconn.delete( _key(redisserver, "devices") )
-    #rconn.delete( _key(redisserver, "logdata", "devices") )    
     rconn.delete( _key(redisserver, "messages") )
-    #rconn.delete( _key(redisserver, "logdata", "messages") )
     for device in device_list:
         rconn.delete( _key(redisserver, "getProperties", "device", device) )
         rconn.delete( _key(redisserver, "devicemessages", device) )
-        #rconn.delete( _key(redisserver, "logdata", "devicemessages", device) )
         property_list = properties(rconn, redisserver, device)
         rconn.delete( _key(redisserver, "properties", device) )
-        #rconn.delete( _key(redisserver, "logdata", "properties", device) )
         for name in property_list:
             rconn.delete( _key(redisserver, "getProperties", "property", name, device) )
             rconn.delete( _key(redisserver, "attributes", name, device) )
-            #rconn.delete( _key(redisserver, "logdata", "attributes", name, device) )
             elements_list = elements(rconn, redisserver, name, device)
             rconn.delete( _key(redisserver, "elements", name, device) )
-            #rconn.delete( _key(redisserver, "logdata", "elements", name, device) )
             for elementname in elements_list:
                 rconn.delete( _key(redisserver, "elementattributes", elementname, name, device) )
-                #rconn.delete( _key(redisserver, "logdata", "elementattributes", elementname, name, device) )
 
 
 def number_to_float(value):

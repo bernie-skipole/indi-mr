@@ -18,6 +18,8 @@ Though INDI is generally used for astronomical instruments, it can work with any
 Versions
 ^^^^^^^^
 
+Version 0.4.0 writes logs to redis streams rather than redis lists, requires redis 5.0 or later
+
 Version 0.3.0 requires Python 3.9 or later
 
 Version 0.2.6 should be used for Python versions prior to 3.9

@@ -31,6 +31,12 @@ You may need the Python3 version of pip to obtain further packages from Pypi.
 
 > apt-get install python3-pip.
 
+Further modules can be installed from Pypi with pip install etc.,
+
+Using a virtual environment may be preferred, if you need further information on pip and virtual environments, try:
+
+https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/
+
 Then install indi-mr from pypi with:
 
 > python3 -m pip install indi-mr
@@ -38,10 +44,6 @@ Then install indi-mr from pypi with:
 Or - if you just want to install it with your own user permissions only:
 
 > python3 -m pip install --user indi-mr
-
-Using a virtual environment may be preferred, if you need further information on pip and virtual environments, try:
-
-https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/
 
 You may also need to install the following packages: 
 
