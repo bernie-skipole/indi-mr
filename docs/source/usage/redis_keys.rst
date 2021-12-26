@@ -64,6 +64,8 @@ Stored logged values
 
 As well as the current values stored above, as values change, a history of data is stored within keys listed here. Each log is stored as a redis stream of {'timestamp':timestamp string, 'datastring': JSON string of data}. The timestamp is the time at which the data was received, not timestamps given in the protocol - though they will be included within the JSON data string where given.
 
+Note: prior to version 0.4.0 logs were stored in redis lists rather than streams. If using a version of redis older than version 5 (in which streams were made available), older versions of indi_mr should be used. If upgrading from an older version, to version 0.4.0 or later, then a redis flush database should be done, to avoid writing stream data to a list.
+
 **logdata:devices**
 
 Each datastring is a JSON list of device names. This rarely changes during normal operation, but new logs will be created as new devices are defined, and as devices are deleted. Therefore each log will have a datastring of the format "[device1, device2, ...]".

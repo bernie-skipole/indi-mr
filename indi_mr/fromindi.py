@@ -13,7 +13,7 @@ ready for reading by the web server."""
 
 import xml.etree.ElementTree as ET
 
-import os, math, json, pathlib
+import os, sys, math, json, pathlib
 
 from datetime import datetime
 
@@ -385,34 +385,37 @@ class ParentProperty():
         "Reads last log entry in redis for this object, and, if changed, logs change with the given timestamp"
         global _LOGLENGTHS
 
-        # log changes in SET of devices to logdata:devices
-        deviceset = self.get_devices(rconn)
-        logkey = key("logdata", "devices")
-        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
+        try:
+            # log changes in SET of devices to logdata:devices
+            deviceset = self.get_devices(rconn)
+            logkey = key("logdata", "devices")
+            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
 
-        # log changes in SET of property names to logdata:properties:<devicename>
-        propertyset = self.get_properties(rconn)
-        logkey = key("logdata", 'properties', self.device)
-        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
+            # log changes in SET of property names to logdata:properties:<devicename>
+            propertyset = self.get_properties(rconn)
+            logkey = key("logdata", 'properties', self.device)
+            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
 
-        # log changes in DICT of attributes to logdata:attributes:<propertyname>:<devicename>
-        attdict = self.get_attributes(rconn)
-        logkey = key("logdata", 'attributes',self.name,self.device)
-        _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['attributes'], attdict)
+            # log changes in DICT of attributes to logdata:attributes:<propertyname>:<devicename>
+            attdict = self.get_attributes(rconn)
+            logkey = key("logdata", 'attributes',self.name,self.device)
+            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['attributes'], attdict)
 
-        # log changes in SET of element names to logdata:elements:<propertyname>:<devicename>
-        elementset = self.get_elements(rconn)
-        logkey = key("logdata", 'elements',self.name,self.device)
-        _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['elements'], elementset)
+            # log changes in SET of element names to logdata:elements:<propertyname>:<devicename>
+            elementset = self.get_elements(rconn)
+            logkey = key("logdata", 'elements',self.name,self.device)
+            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['elements'], elementset)
 
-        # log changes in element attributes
-        loglengthvector = self.vector.lower()
-        for element in self.elements.values():
-            # log changes in attributes to logdata:elementattributes:<elementname>:<propertyname>:<devicename>
-            elattdict = self.get_elements_dict(rconn, element.name)
-            logkey = key("logdata", 'elementattributes',element.name, self.name, self.device)
-            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS[loglengthvector], elattdict)
-
+            # log changes in element attributes
+            loglengthvector = self.vector.lower()
+            for element in self.elements.values():
+                # log changes in attributes to logdata:elementattributes:<elementname>:<propertyname>:<devicename>
+                elattdict = self.get_elements_dict(rconn, element.name)
+                logkey = key("logdata", 'elementattributes',element.name, self.name, self.device)
+                _updatelog(rconn, timestamp, logkey, _LOGLENGTHS[loglengthvector], elattdict)
+        except Exception as e:
+            # on failure to create a log, return without doing anything
+            print("Failed to write log", file=sys.stderr)
 
 
     @classmethod
@@ -1057,16 +1060,20 @@ class Message():
     def log(self, rconn, timestamp):
         "Reads last log entry in redis for this object, and, if changed, logs change with the given timestamp"
         global _LOGLENGTHS
-        # log changes in messages to logdata:messages or to logdata:devicemessages:<devicename>
-        messagelist = self.get_message(rconn, device=self.device)
-        if not messagelist:
-            return
-        # messagelist is [timestamp, message] in which timestamp is the message timestamp, not the log timestamp
-        if self.device:
-            logkey = key("logdata", "devicemessages", self.device)
-        else:
-            logkey = key("logdata", "messages")
-        _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+        try:
+            # log changes in messages to logdata:messages or to logdata:devicemessages:<devicename>
+            messagelist = self.get_message(rconn, device=self.device)
+            if not messagelist:
+                return
+            # messagelist is [timestamp, message] in which timestamp is the message timestamp, not the log timestamp
+            if self.device:
+                logkey = key("logdata", "devicemessages", self.device)
+            else:
+                logkey = key("logdata", "messages")
+            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+        except Exception as e:
+            # on failure to create a log, return without doing anything
+            print("Failed to write log", file=sys.stderr)
 
 
     def __str__(self):
@@ -1142,36 +1149,40 @@ class delProperty():
     def log(self, rconn, timestamp):
         "Reads last log entry in redis for this object, and, if changed, logs change with the given timestamp"
         global _LOGLENGTHS
-        if self.name:
-            # a property has been deleted, log changes in property names to logdata:properties:<devicename>
-            propertysetfromredis = rconn.smembers(key('properties', self.device))
-            if not propertysetfromredis:
-                propertyset = set(["--None--"])
+        try:
+            if self.name:
+                # a property has been deleted, log changes in property names to logdata:properties:<devicename>
+                propertysetfromredis = rconn.smembers(key('properties', self.device))
+                if not propertysetfromredis:
+                    propertyset = set(["--None--"])
+                else:
+                    propertyset = set(p.decode("utf-8") for p in propertysetfromredis)
+                logkey = key("logdata", 'properties', self.device)
+                _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
+
+                # log changes in messages to logdata:devicemessages:<devicename>
+                messagelist = Message.get_message(rconn, device=self.device)
+                if not messagelist:
+                    return
+                logkey = key("logdata", "devicemessages", self.device)
+                _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+
             else:
-                propertyset = set(p.decode("utf-8") for p in propertysetfromredis)
-            logkey = key("logdata", 'properties', self.device)
-            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['properties'], propertyset)
+                # no property name, so an entire device has been wiped
+                # log changes in devices to logdata:devices
+                deviceset = ParentProperty.get_devices(rconn)
+                logkey = key("logdata", "devices")
+                _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
 
-            # log changes in messages to logdata:devicemessages:<devicename>
-            messagelist = Message.get_message(rconn, device=self.device)
-            if not messagelist:
-                return
-            logkey = key("logdata", "devicemessages", self.device)
-            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
-
-        else:
-            # no property name, so an entire device has been wiped
-            # log changes in devices to logdata:devices
-            deviceset = ParentProperty.get_devices(rconn)
-            logkey = key("logdata", "devices")
-            _updatelogset(rconn, timestamp, logkey, _LOGLENGTHS['devices'], deviceset)
-
-             # log changes in messages to logdata:messages
-            messagelist = Message.get_message(rconn)
-            if not messagelist:
-                return
-            logkey = key("logdata", "messages")
-            _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+                 # log changes in messages to logdata:messages
+                messagelist = Message.get_message(rconn)
+                if not messagelist:
+                    return
+                logkey = key("logdata", "messages")
+                _updatelog(rconn, timestamp, logkey, _LOGLENGTHS['messages'], messagelist)
+        except Exception as e:
+            # on failure to create a log, return without doing anything
+            print("Failed to write log", file=sys.stderr)
  
 
 

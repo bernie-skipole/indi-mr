@@ -312,22 +312,25 @@ def logs(rconn, redisserver, number, *keys):
     :return: A list of lists, inner lists being [timestamp string, data list or dictionary]
     :rtype: List
     """
-    if number < 1:
-        return []
-    logkey = _key(redisserver, "logdata", *keys)
-    logs = rconn.xrevrange(logkey, max='+', min='-', count=number)
-    if logs:
-        nlogs = []
-        for logentry in logs:
-            # logentry is of the form
-            # (id, {b"timestamp":timestamp, b"datastring":datastring})
-            timestring = logentry[1][b"timestamp"].decode("utf-8")
-            datastring = logentry[1][b"datastring"].decode("utf-8")
-            logdata = json.loads(datastring)
-            nlogs.append([timestring,logdata])
-        return nlogs
-    else:
-        return []
+    try:
+        if number < 1:
+            return []
+        logkey = _key(redisserver, "logdata", *keys)
+        logs = rconn.xrevrange(logkey, max='+', min='-', count=number)
+        if logs:
+            nlogs = []
+            for logentry in logs:
+                # logentry is of the form
+                # (id, {b"timestamp":timestamp, b"datastring":datastring})
+                timestring = logentry[1][b"timestamp"].decode("utf-8")
+                datastring = logentry[1][b"datastring"].decode("utf-8")
+                logdata = json.loads(datastring)
+                nlogs.append([timestring,logdata])
+            return nlogs
+    except Exception as e:
+        # on failure to read logs
+        print("Failed to read log", file=sys.stderr)
+    return []
 
 
 
