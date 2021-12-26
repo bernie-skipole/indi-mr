@@ -229,7 +229,7 @@ def _updatelog(rconn, timestamp, logkey, maxlen, newdata):
         # [(id, {b"timestamp":timestamp, b"datastring":datastring})]
         datastring = logentry[0][1][b"datastring"].decode("utf-8")
         olddata = json.loads(datastring)
-        if olddatadict != newdata:
+        if olddata != newdata:
             # there has been a change in the data, so create a log
             rconn.xadd(logkey, {"timestamp": timestamp,
                                 "datastring": json.dumps(newdata)}, maxlen=maxlen)
