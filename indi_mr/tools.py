@@ -325,6 +325,8 @@ def logs(rconn, redisserver, number, *keys):
                 timestring = logentry[1][b"timestamp"].decode("utf-8")
                 datastring = logentry[1][b"datastring"].decode("utf-8")
                 logdata = json.loads(datastring)
+                if isinstance(logdata, list):
+                    logdata.sort()
                 nlogs.append([timestring,logdata])
             return nlogs
     except Exception as e:
