@@ -38,7 +38,7 @@ from datetime import datetime
 
 from base64 import standard_b64encode
 
-import re, json, math
+import sys, re, json, math
 
 REDIS_AVAILABLE = True
 try:
@@ -66,11 +66,11 @@ def open_redis(redisserver):
         return
     try:
         # create a connection to redis
-        rconn = redis.StrictRedis(host=redisserver.host,
-                                  port=redisserver.port,
-                                  db=redisserver.db,
-                                  password=redisserver.password,
-                                  socket_timeout=5)
+        rconn = redis.Redis(host=redisserver.host,
+                            port=redisserver.port,
+                            db=redisserver.db,
+                            password=redisserver.password,
+                            socket_timeout=5)
     except Exception:
         return
     return rconn
