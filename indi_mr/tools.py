@@ -34,6 +34,8 @@ Where a timestamp is specified, unless otherwise stated, it will be a string acc
 
 import xml.etree.ElementTree as ET
 
+from time import sleep
+
 from datetime import datetime
 
 from base64 import standard_b64encode
@@ -54,25 +56,38 @@ def _key(redisserver, *keys):
     return redisserver.keyprefix + ":".join(keys)
 
 
-def open_redis(redisserver):
-    """Opens a redis connection, return None on failure
+def open_redis(redisserver, connectnumber=10):
+    """Opens a redis connection, raises redis exceptions on failure
 
     :param redisserver: The redis server parameters
     :type redisserver: namedtuple
-    :return: A redis connection, or None on failure
+    :param connectnumber: Number of tries before failure
+    :type connectnumber: integer
+    :return: A redis connection
     :rtype: redis.client.Redis
     """
     if not REDIS_AVAILABLE:
-        return
-    try:
-        # create a connection to redis
-        rconn = redis.Redis(host=redisserver.host,
-                            port=redisserver.port,
-                            db=redisserver.db,
-                            password=redisserver.password,
-                            socket_timeout=5)
-    except Exception:
-        return
+        print("Error - Unable to import the Python redis package")
+        sys.exit(1)
+    # create a connection to redis
+    while True:
+        try:
+            rconn = redis.Redis(host=redisserver.host,
+                                port=redisserver.port,
+                                db=redisserver.db,
+                                password=redisserver.password,
+                                socket_timeout=5)
+        except Exception:
+            # No connection, wait and try again
+            sleep(2)
+            connectnumber -= 1
+            if connectnumber > 0:
+                continue
+            # failed to connect ten times
+            raise
+        else:
+            # no exception, rconn connected
+            break
     return rconn
 
 
